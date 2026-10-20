@@ -1,6 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import json
+import os
 import re
 import urllib.request
 
@@ -23,6 +24,14 @@ def is_allowed(url):
 
 def extract(url):
     opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "skip_download": True}
+    host = (urlparse(url).hostname or "").lower()
+    if "youtube.com" in host or host == "youtu.be":
+        opts["extractor_args"] = {"youtube": {"player_client": ["android_vr", "web_safari", "tv"]}}
+        cookies = os.environ.get("YT_COOKIES", "").strip()
+        if cookies:
+            with open("/tmp/yt_cookies.txt", "w") as fh:
+                fh.write(cookies + "\n")
+            opts["cookiefile"] = "/tmp/yt_cookies.txt"
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
         try:
