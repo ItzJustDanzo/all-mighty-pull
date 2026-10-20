@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipcatch: paste a link, save the video</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0d1b2a;
+    --panel: #162a40;
+    --line: #2a4560;
+    --text: #e9f1f5;
+    --muted: #8ea6b8;
+    --teal: #38d6c4;
+    --pink: #ff5c93;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ink); }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text);
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    display: grid; place-items: start center; padding: 8vh 18px 40px;
+  }
+  main { width: 100%; max-width: 640px; }
+  h1 { font-size: clamp(2.2rem, 7vw, 3.6rem); line-height: 1.02; margin: 0 0 12px; font-weight: 800; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 1.05rem; max-width: 46ch; }
+
+  .box { display: flex; gap: 8px; background: var(--panel); border: 2px solid var(--line); border-radius: var(--radius); padding: 8px; transition: border-color .15s; }
+  .box:focus-within { border-color: var(--teal); }
+  input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); font: inherit; font-size: 1.05rem; padding: 12px; outline: none; }
+  input::placeholder { color: #5f7a90; }
+  button, .dl { font: inherit; font-weight: 600; cursor: pointer; border: 0; border-radius: 10px; }
+  #go { background: var(--teal); color: #062a26; padding: 0 22px; }
+  #go:disabled { opacity: .6; cursor: wait; }
+  button:focus-visible, .dl:focus-visible, a:focus-visible { outline: 3px solid var(--pink); outline-offset: 2px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+  .chips li { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: .9rem; transition: all .15s; }
+  .chips li.on { background: var(--pink); border-color: var(--pink); color: #2a0614; font-weight: 600; }
+
+  #msg { margin: 18px 0 0; min-height: 1.4em; color: var(--pink); }
+  #result { margin-top: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  #result[hidden] { display: none; }
+  .head { display: flex; gap: 14px; padding: 14px; align-items: center; }
+  .head img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; background: var(--ink); flex: none; }
+  .head h2 { font-size: 1.05rem; margin: 0 0 4px; line-height: 1.25; overflow-wrap: anywhere; }
+  .head p { margin: 0; color: var(--muted); font-size: .9rem; }
+  .opts { display: grid; gap: 8px; padding: 0 14px 14px; }
+  .dl { display: flex; justify-content: space-between; align-items: center; text-decoration: none; background: var(--ink); color: var(--text); padding: 14px 16px; border: 1px solid var(--line); }
+  .dl:hover { border-color: var(--teal); }
+  .dl span:last-child { color: var(--muted); font-weight: 400; font-size: .9rem; }
+  footer { margin-top: 36px; color: var(--muted); font-size: .85rem; max-width: 60ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Paste a link. Save the video.</h1>
+  <p class="sub">Works with public videos from TikTok, Instagram, Facebook, Snapchat and YouTube.</p>
+
+  <form class="box" id="form">
+    <input id="url" type="url" placeholder="https://" aria-label="Video link" autocomplete="off" required>
+    <button id="go" type="submit">Get video</button>
+  </form>
+
+  <ul class="chips" id="chips">
+    <li data-p="tiktok">TikTok</li>
+    <li data-p="instagram">Instagram</li>
+    <li data-p="facebook|fb.watch">Facebook</li>
+    <li data-p="snapchat">Snapchat</li>
+    <li data-p="youtube|youtu.be">YouTube</li>
+  </ul>
+
+  <p id="msg" role="status"></p>
+
+  <section id="result" hidden>
+    <div class="head">
+      <img id="thumb" alt="" referrerpolicy="no-referrer">
+      <div><h2 id="title"></h2><p id="meta"></p></div>
+    </div>
+    <div class="opts" id="opts"></div>
+  </section>
+
+  <footer>Only download videos you made or have permission to save. Private videos and accounts that need a login won't work.</footer>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const urlEl = $("url"), msg = $("msg"), go = $("go");
+
+  function highlight() {
+    const v = urlEl.value.toLowerCase();
+    document.querySelectorAll("#chips li").forEach((li) => {
+      li.classList.toggle("on", v && new RegExp(li.dataset.p).test(v));
+    });
+  }
+  urlEl.addEventListener("input", highlight);
+
+  const fmtSize = (b) => (b ? (b / 1048576).toFixed(1) + " MB" : "");
+  const fmtTime = (s) => (s ? Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") : "");
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const link = urlEl.value.trim();
+    msg.textContent = ""; $("result").hidden = true;
+    go.disabled = true; go.textContent = "Looking…";
+    try {
+      const res = await fetch("/api/dl?url=" + encodeURIComponent(link));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+      if (!data.formats.length) throw new Error("No downloadable file was found for this link.");
+
+      $("thumb").src = data.thumbnail || "";
+      $("thumb").style.visibility = data.thumbnail ? "visible" : "hidden";
+      $("title").textContent = data.title;
+      $("meta").textContent = [data.uploader, fmtTime(data.duration)].filter(Boolean).join(" · ");
+
+      const opts = $("opts"); opts.textContent = "";
+      data.formats.forEach((f) => {
+        const a = document.createElement("a");
+        a.className = "dl";
+        a.href = "/api/dl?url=" + encodeURIComponent(link) + "&fid=" + encodeURIComponent(f.id);
+        a.setAttribute("download", "");
+        const l = document.createElement("span"); l.textContent = "Download " + f.label;
+        const s = document.createElement("span"); s.textContent = [f.ext.toUpperCase(), fmtSize(f.size)].filter(Boolean).join(" ");
+        a.append(l, s); opts.append(a);
+      });
+      $("result").hidden = false;
+    } catch (err) {
+      msg.textContent = err.message;
+    } finally {
+      go.disabled = false; go.textContent = "Get video";
+    }
+  });
+</script>
+</body>
+</html>
